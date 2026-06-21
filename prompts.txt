@@ -1,0 +1,11 @@
+2026-06-20T00:00:00Z — Create CLAUDE.md in the project root with a "Prompt Logging" rule requiring every new prompt to be appended to prompts.txt with an ISO 8601 timestamp and a brief summary.
+  Response: Created CLAUDE.md with the Project Rules / Prompt Logging instruction, then created this prompts.txt log file and recorded this first entry.
+
+2026-06-20T00:00:00Z — Read all project docs (PROJECT.md, DESIGN.md, ARCHITECTURE.md, TASKS.md) as a Senior Staff Engineer and report inconsistencies, risks, overengineering, and missing requirements. No implementation requested.
+  Response: Reviewed all four docs; produced a prioritized findings report (conflicts, risks, overengineering, gaps). No code changed.
+
+2026-06-21T00:00:00Z — "Yes, proceed": turn the Senior Staff Engineer review into a concrete decisions doc — a proposed resolution for each finding plus a frozen API/error contract. No code yet.
+  Response: Authored DECISIONS.md with resolutions for every C/R/O/M item and a frozen REST + error contract. No application code changed.
+
+2026-06-21T00:00:00Z — Update CLAUDE.md to define how AI agents should work within this project, without duplicating content from existing docs.
+  Response: Rewrote CLAUDE.md as an agent operating guide (doc hierarchy/source-of-truth, working norms, guardrails, prompt-logging rule) with pointers to existing docs instead of restating them.
