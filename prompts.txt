@@ -9,3 +9,6 @@
 
 2026-06-21T00:00:00Z — Update CLAUDE.md to define how AI agents should work within this project, without duplicating content from existing docs.
   Response: Rewrote CLAUDE.md as an agent operating guide (doc hierarchy/source-of-truth, working norms, guardrails, prompt-logging rule) with pointers to existing docs instead of restating them.
+
+2026-06-21T00:00:00Z — "Let's start with the implementation. Read TASKS.md and execute phase 2" (Backend API).
+  Response: Implemented the full Go backend per the frozen contract — vertical-slice layout (auth/feature/vote) + shared (apperr, httpx, token, middleware) + infrastructure (config, pgx pool with retry, idempotent migrate, only-if-empty seed, chi router with CORS/health). Endpoints: health, signup, login, create/list/get features (search+sort+pagination+trending v1), vote (self-vote/duplicate/not-found rules; DB unique constraint). Added mock-based unit tests for auth/feature/vote/token. go vet + gofmt clean; all tests pass; binary builds. No DB integration run (unit-only per DECISIONS; Postgres arrives in Phase 6 Docker).
