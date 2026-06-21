@@ -1,24 +1,29 @@
 import type { CSSProperties } from 'react'
 import type { FeatureView } from '../api/types'
 import { relativeTime } from '../lib/format'
+import { accentFor } from '../lib/cardAccents'
 import { VoteButton } from './VoteButton'
 
 interface FeatureCardProps {
   feature: FeatureView
+  index: number
   onVote: (id: string) => void
-  style?: CSSProperties
 }
 
-export function FeatureCard({ feature, onVote, style }: FeatureCardProps) {
+export function FeatureCard({ feature, index, onVote }: FeatureCardProps) {
+  const accent = accentFor(index)
+  const style = {
+    '--card-accent': accent,
+    animationDelay: `${Math.min(index, 8) * 35}ms`,
+  } as CSSProperties
+
   return (
-    <article
-      style={style}
-      className="animate-rise group flex gap-3 rounded-2xl border border-border bg-surface/70 p-4 transition-colors duration-200 hover:border-border-strong hover:bg-surface-2/50"
-    >
+    <article style={style} className="feature-card animate-rise group flex h-full gap-3 p-4">
       <VoteButton
         count={feature.total_votes}
         hasVoted={feature.has_voted}
         isAuthor={feature.is_author}
+        accent={accent}
         onVote={() => onVote(feature.id)}
       />
 

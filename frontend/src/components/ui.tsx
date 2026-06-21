@@ -3,12 +3,9 @@ import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type T
 type Variant = 'primary' | 'success' | 'ghost' | 'subtle'
 
 const VARIANTS: Record<Variant, string> = {
-  primary:
-    'bg-accent text-bg font-semibold shadow-[0_0_0_1px_rgba(6,182,212,0.5),0_8px_30px_-12px_rgba(6,182,212,0.6)] hover:brightness-110 active:brightness-95',
-  success:
-    'bg-success text-bg font-semibold hover:brightness-110 active:brightness-95',
-  ghost:
-    'border border-border bg-surface-2/60 text-text hover:border-border-strong hover:bg-surface-2',
+  primary: 'btn-cta font-semibold',
+  success: 'bg-success text-bg font-semibold hover:brightness-110 active:brightness-95',
+  ghost: 'border border-border bg-surface-2/60 text-text hover:border-border-strong hover:bg-surface-2',
   subtle: 'text-muted hover:text-text',
 }
 

@@ -1,28 +1,29 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
 interface VoteButtonProps {
   count: number
   hasVoted: boolean
   isAuthor: boolean
+  accent?: string
   onVote: () => void
 }
 
-export function VoteButton({ count, hasVoted, isAuthor, onVote }: VoteButtonProps) {
+export function VoteButton({ count, hasVoted, isAuthor, accent = '#06b6d4', onVote }: VoteButtonProps) {
   const [pop, setPop] = useState(false)
   const prevVoted = useRef(hasVoted)
 
-  // Pop the count whenever this card transitions into the voted state.
+  // Pop + ring burst whenever this card transitions into the voted state.
   useEffect(() => {
     if (hasVoted && !prevVoted.current) {
       setPop(true)
-      const t = setTimeout(() => setPop(false), 320)
+      const t = setTimeout(() => setPop(false), 520)
       return () => clearTimeout(t)
     }
     prevVoted.current = hasVoted
   }, [hasVoted])
 
   const base =
-    'group/vote flex w-14 shrink-0 flex-col items-center gap-0.5 rounded-xl border px-2 py-2.5 transition-all duration-150'
+    'group/vote relative flex w-14 shrink-0 flex-col items-center gap-0.5 rounded-xl border px-2 py-2.5 transition-all duration-200'
 
   if (isAuthor) {
     return (
@@ -44,14 +45,20 @@ export function VoteButton({ count, hasVoted, isAuthor, onVote }: VoteButtonProp
       aria-pressed={hasVoted}
       aria-label={hasVoted ? `Voted. ${count} votes` : `Vote for this request. ${count} votes`}
       disabled={hasVoted}
+      style={!hasVoted ? ({ '--vote-accent': accent } as CSSProperties) : undefined}
       className={`${base} ${
         hasVoted
-          ? 'cursor-default border-success/40 bg-success/15 text-success'
-          : 'border-border bg-surface-2/40 text-muted hover:-translate-y-0.5 hover:border-accent/50 hover:text-accent'
+          ? 'cursor-default border-success/50 bg-success/15 text-success shadow-[0_0_22px_-8px_#22c55e]'
+          : 'border-border bg-surface-2/40 text-muted hover:-translate-y-0.5 hover:border-[var(--vote-accent)] hover:text-[var(--vote-accent)] hover:shadow-[0_10px_26px_-12px_var(--vote-accent)] active:translate-y-0 active:scale-95'
       }`}
     >
+      {pop && (
+        <span aria-hidden="true" className="vote-ring pointer-events-none absolute inset-0 rounded-xl border-2 border-success" />
+      )}
       <Triangle filled={hasVoted} />
-      <span className={`font-mono text-sm font-semibold ${pop ? 'animate-vote-pop' : ''} ${hasVoted ? 'text-success' : 'text-text'}`}>
+      <span
+        className={`font-mono text-sm font-semibold ${pop ? 'animate-vote-pop' : ''} ${hasVoted ? 'text-success' : 'text-text'}`}
+      >
         {count}
       </span>
     </button>

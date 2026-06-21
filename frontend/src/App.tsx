@@ -46,7 +46,7 @@ export default function App() {
         <section
           id="board"
           aria-labelledby="board-heading"
-          className="mx-auto flex max-w-3xl scroll-mt-20 flex-col gap-5 px-4 pb-24 sm:px-6"
+          className="mx-auto flex max-w-5xl scroll-mt-20 flex-col gap-5 px-4 pb-24 sm:px-6"
         >
           <h2 id="board-heading" className="sr-only">
             Feature requests
@@ -82,14 +82,11 @@ function Results({ features }: { features: ReturnType<typeof useFeatures> }) {
         {data.total} {data.total === 1 ? 'request' : 'requests'}
       </p>
 
-      <div className={`flex flex-col gap-3 transition-opacity ${loading ? 'opacity-60' : 'opacity-100'}`}>
+      <div
+        className={`grid grid-cols-1 gap-3 transition-opacity sm:grid-cols-2 ${loading ? 'opacity-60' : 'opacity-100'}`}
+      >
         {data.items.map((feature, i) => (
-          <FeatureCard
-            key={feature.id}
-            feature={feature}
-            onVote={vote}
-            style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
-          />
+          <FeatureCard key={feature.id} feature={feature} index={i} onVote={vote} />
         ))}
       </div>
 

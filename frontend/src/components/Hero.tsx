@@ -23,7 +23,7 @@ export function Hero({ onSubmit }: { onSubmit: () => void }) {
         </span>
 
         <h1 className="mx-auto mt-6 max-w-2xl text-balance text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
-          Shape the Future of <span className="text-accent">SoundFlow</span>
+          Shape the Future of <span className="text-gradient">SoundFlow</span>
         </h1>
 
         <p className="mx-auto mt-5 max-w-xl text-pretty text-base text-muted sm:text-lg">
