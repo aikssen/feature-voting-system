@@ -1,0 +1,10 @@
+bin/
+dist/
+*.test
+*.out
+*.prof
+.env
+.env.*
+!.env.example
+Dockerfile
+.dockerignore

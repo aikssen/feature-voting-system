@@ -1,0 +1,52 @@
+# SoundFlow Feature Voting System — full stack.
+#
+#   docker compose up --build
+#
+# Brings up Postgres, the Go API, and the Vite dev server. The backend waits for
+# Postgres to be healthy, then auto-applies the schema and seeds demo data once.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: soundflow
+      POSTGRES_PASSWORD: soundflow
+      POSTGRES_DB: soundflow
+    volumes:
+      # Named volume → data survives `docker compose down` and restarts.
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432" # exposed for local inspection; not required by the app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soundflow -d soundflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgres://soundflow:soundflow@db:5432/soundflow?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      JWT_TTL_HOURS: "24"
+      PORT: "3000"
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    environment:
+      # The browser runs on the host, so it reaches the API via the published port.
+      VITE_API_BASE_URL: http://localhost:3000/api/v1
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
