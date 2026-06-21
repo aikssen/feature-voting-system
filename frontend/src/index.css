@@ -13,7 +13,9 @@
 
   --color-text: #f4f4f5;
   --color-muted: #a1a1aa;
-  --color-faint: #71717a;
+  /* #71717a fell just under WCAG AA (~4.2:1) on the near-black bg for small text;
+     #8b8b95 clears 4.5:1 on both the page and card surfaces. */
+  --color-faint: #8b8b95;
 
   --color-accent: #06b6d4; /* cyan — links, focus, key actions */
   --color-accent-soft: #0e7490;

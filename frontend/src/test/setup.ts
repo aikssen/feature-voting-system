@@ -1,6 +1,9 @@
 import '@testing-library/jest-dom/vitest'
-import { afterEach } from 'vitest'
+import { afterEach, expect } from 'vitest'
 import { cleanup } from '@testing-library/react'
+import { toHaveNoViolations } from 'jest-axe'
+
+expect.extend(toHaveNoViolations)
 
 // jsdom under this Node build does not expose a Web Storage implementation,
 // so provide a minimal in-memory one for tests.
@@ -32,6 +35,12 @@ if (!('localStorage' in globalThis) || globalThis.localStorage == null) {
   if (typeof window !== 'undefined') {
     Object.defineProperty(window, 'localStorage', { value: storage, writable: true, configurable: true })
   }
+}
+
+// jsdom doesn't implement scrollIntoView; stub it so handlers that call it
+// (e.g. the hero CTA scrolling to the board) don't throw during tests.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {}
 }
 
 afterEach(() => {

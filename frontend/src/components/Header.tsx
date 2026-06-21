@@ -22,7 +22,7 @@ export function Header() {
               >
                 {initialOf(user.name)}
               </span>
-              <span className="hidden text-sm font-medium text-text sm:inline">{user.name}</span>
+              <span className="hidden max-w-[10rem] truncate text-sm font-medium text-text sm:inline-block sm:align-middle">{user.name}</span>
             </span>
             <Button variant="subtle" onClick={logout} className="px-2 py-1.5">
               Log out

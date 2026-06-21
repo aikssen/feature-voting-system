@@ -193,6 +193,10 @@ API_BASE=http://localhost:3000/api/v1 ./scripts/smoke.sh
 search + ranking), create + duplicate guard, voting with the self-vote / duplicate
 / auth / not-found rejections, and CORS.
 
+The frontend suite includes automated accessibility checks (axe). See
+**`QUALITY.md`** for the full quality report — test coverage plus the
+accessibility, responsive, and mobile-usability validation.
+
 ---
 
 ## Project structure

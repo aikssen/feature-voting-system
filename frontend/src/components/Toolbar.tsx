@@ -28,16 +28,18 @@ export function Toolbar({ search, sort, onSearch, onSort }: ToolbarProps) {
         />
       </div>
 
-      <div role="tablist" aria-label="Sort feature requests" className="flex gap-1.5">
+      {/* Single-select sort → radiogroup semantics (not tabs, which imply panels). */}
+      <div role="radiogroup" aria-label="Sort feature requests" className="flex flex-wrap gap-1.5">
         {FILTERS.map((f) => {
           const active = sort === f.value
           return (
             <button
               key={f.value}
-              role="tab"
-              aria-selected={active}
+              type="button"
+              role="radio"
+              aria-checked={active}
               onClick={() => onSort(f.value)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 active
                   ? 'bg-accent/15 text-accent ring-1 ring-accent/30'
                   : 'text-muted hover:bg-surface-2/60 hover:text-text'
