@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# SoundFlow Feature Voting System — repository ignore rules
+# ---------------------------------------------------------------------------
+
+# Environment / secrets (never commit real values; *.example files are tracked)
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+*.code-workspace
+
+# ---------------------------------------------------------------------------
+# Backend — Go
+# ---------------------------------------------------------------------------
+# Compiled binaries / build output
+backend/bin/
+backend/dist/
+backend/soundflow
+backend/api
+*.exe
+*.out
+*.test
+
+# Go coverage / profiling
+*.prof
+coverage.out
+coverage.txt
+
+# Go workspace files
+go.work
+go.work.sum
+
+# ---------------------------------------------------------------------------
+# Frontend — Node / Vite / React
+# ---------------------------------------------------------------------------
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/coverage/
+*.local
+
+# Package manager logs / debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------------------------------------------------------------------------
+# Docker (Phase 6) — local volume mounts, if any are created locally
+# ---------------------------------------------------------------------------
+**/.docker-data/
