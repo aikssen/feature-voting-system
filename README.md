@@ -15,6 +15,9 @@ matters most — so the product team can prioritise with confidence.
 
 ---
 
+<img width="1678" height="917" alt="Screenshot 2026-06-21 at 02 02 59" src="https://github.com/user-attachments/assets/b236c6d6-7717-464b-af4e-5f191d7a56a1" />
+
+
 ## Quick start (Docker)
 
 Requirements: Docker with Compose v2.
