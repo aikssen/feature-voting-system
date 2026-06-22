@@ -86,6 +86,12 @@ Backend:
 | `PORT` | no | `3000` | API port |
 | `CORS_ALLOWED_ORIGINS` | no | `http://localhost:5173` | Comma-separated |
 
+The app reads only the vars above (all from the process environment). Config lives in
+a single gitignored `.env` at the repo root (`.env.example` is the template); Docker
+Compose auto-loads it. `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` are
+Compose-only inputs that configure the `db` container and build the backend
+`DATABASE_URL` (host `db`) — they are not consumed by the application directly.
+
 Frontend (build-time):
 
 | Var | Default | Notes |

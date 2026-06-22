@@ -23,8 +23,13 @@ matters most — so the product team can prioritise with confidence.
 Requirements: Docker with Compose v2.
 
 ```bash
+cp .env.example .env          # one-time: credentials + JWT secret (gitignored)
 docker compose up --build
 ```
+
+The committed `.env.example` ships working defaults, so the copy is enough to boot
+locally. Edit `.env` to set a real `JWT_SECRET` and DB credentials before any
+non-local use — nothing sensitive is hardcoded in `docker-compose.yml`.
 
 Then open:
 
@@ -68,9 +73,9 @@ You need Go 1.26+, Node 22+, pnpm, and a PostgreSQL 16 instance.
 **Backend**
 
 ```bash
-cd backend
-cp .env.example .env          # set DATABASE_URL + JWT_SECRET
+cp .env.example .env          # at the repo root; set DATABASE_URL + JWT_SECRET
 export $(grep -v '^#' .env | xargs)
+cd backend
 go run ./cmd/api              # serves on :3000, auto-migrates + seeds
 go test ./...                 # unit tests (mock-based, no DB needed)
 ```
@@ -90,11 +95,12 @@ pnpm build                    # type-check + production build
 
 ## Configuration
 
-**Backend** (`backend/.env.example`)
+**Backend / Postgres** (root `.env.example`)
 
 | Variable | Required | Default | Notes |
 |----------|----------|---------|-------|
-| `DATABASE_URL` | yes | — | Postgres DSN |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | docker | `soundflow` | Postgres container creds; the backend's `DATABASE_URL` is built from these under Compose |
+| `DATABASE_URL` | yes | — | Postgres DSN (native dev; Compose overrides the host to `db`) |
 | `JWT_SECRET` | yes | — | App refuses to boot if empty |
 | `JWT_TTL_HOURS` | no | `24` | Token lifetime (no refresh token) |
 | `PORT` | no | `3000` | API port |

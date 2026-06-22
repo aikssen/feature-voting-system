@@ -87,14 +87,6 @@ export function SubmitFeatureForm({ open, onClose, onCreated }: SubmitFeatureFor
     >
       <div className="flex items-center justify-between">
         <h2 className="font-semibold text-text">New feature request</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close form"
-          className="rounded-lg px-2 py-1 text-sm text-muted hover:text-text"
-        >
-          Cancel
-        </button>
       </div>
 
       <TextField
