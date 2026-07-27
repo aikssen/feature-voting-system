@@ -1,44 +1,92 @@
-# Production override — for exposure beyond the LAN (Cloudflare Tunnel → Traefik).
+# Production stack — for exposure beyond the LAN (Cloudflare Tunnel → Traefik).
 #
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml up -d --build
 #
-# The base file stays the review stack described in DECISIONS.md C5: `docker compose
-# up` still brings up the Vite dev server, unchanged. This override is the deployment
-# path added by A1, and it differs in three ways:
+# `docker-compose.yml` remains the review stack of DECISIONS.md C5: `docker compose up`
+# still brings up the Vite dev server, untouched. This file is the deployment path
+# added by A1, and it is **self-contained on purpose**: Dokploy points a Compose
+# application at a single compose path, so an override chain
+# (`-f base -f override`) is not expressible there.
 #
-#   1. the frontend is a built SPA served by Caddy, not a dev server;
-#   2. Caddy proxies /api to the backend, so the browser sees a single origin —
-#      no CORS, and the baked API base URL is the relative `/api/v1`;
-#   3. the database and the API stop publishing host ports. Once a reverse proxy
-#      routes the hostname, the only way in should be the reverse proxy.
+# Differences from the review stack:
 #
-# `!reset` is required because Compose *appends* list values like `ports` when
-# merging files; assigning an empty list would otherwise leave the base entry.
+#   1. the frontend is a built SPA served by Caddy, which also reverse-proxies /api
+#      to the backend — one origin, so no CORS and no cross-site cookies;
+#   2. the baked API base URL is the relative `/api/v1`, so the image is not tied to
+#      a hostname and can be promoted between domains without a rebuild;
+#   3. nothing publishes a host port. The reverse proxy is the only way in.
+#
+# Routing is left to Dokploy Domains (its recommended path): add the domain in the
+# UI against the `frontend` service on port 80, and Dokploy writes the Traefik
+# router. The service joins `dokploy-network` below so Traefik can reach it.
+#
+# TLS terminates at Cloudflare. Do not enable a certificate resolver for these
+# hostnames — the hop from Traefik to Caddy is plain HTTP inside the host.
+
+x-app-env: &app-env
+  # required:false, unlike the review stack: on a Dokploy deploy the environment is
+  # injected by the platform, and a missing .env should not fail the stack.
+  - path: ${SOUNDFLOW_COMPOSE_ENV_FILE:-.env}
+    required: false
 
 services:
   db:
-    # Never reachable from outside the Compose network.
-    ports: !reset []
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: *app-env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-soundflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-soundflow}
+      POSTGRES_DB: ${POSTGRES_DB:-soundflow}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-soundflow} -d ${POSTGRES_DB:-soundflow}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   backend:
-    # Same-origin means the browser never sends a cross-origin request to the API,
-    # so no allowlist is needed. Leaving a stale LAN origin here would be the kind
-    # of permission nobody notices until it is abused.
-    ports: !reset []
+    build: ./backend
+    restart: unless-stopped
+    env_file: *app-env
     environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-soundflow}:${POSTGRES_PASSWORD:-soundflow}@db:5432/${POSTGRES_DB:-soundflow}?sslmode=disable
+      # Fixed container port, as D-ENV requires. Caddy reaches it as backend:3000 on
+      # the Compose network — unrelated to whatever occupies port 3000 on the host.
+      BACKEND_PORT: "3000"
+      # Same origin means the browser never issues a cross-origin request, so an
+      # allowlist here would only be a stale permission nobody audits.
       CORS_ALLOWED_ORIGINS: ""
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        # Relative on purpose: the image is hostname-agnostic, so promoting it to a
-        # different domain needs no rebuild.
         VITE_API_BASE_URL: /api/v1
-    # The dev server's runtime variables do not apply to a built bundle.
-    environment: !reset {}
-    ports:
-      # Host port kept for parity with the review stack, now pointing at Caddy.
-      # It can be dropped entirely once the reverse proxy fronts the container.
-      - ${FRONTEND_PORT:-5173}:80
+    restart: unless-stopped
+    expose:
+      - 80
+    depends_on:
+      - backend
+    networks:
+      - default
+      - dokploy-network
+
+volumes:
+  pgdata:
+
+networks:
+  # Created by Dokploy. Traefik lives here, and a container it cannot reach cannot
+  # be routed to.
+  dokploy-network:
+    external: true
