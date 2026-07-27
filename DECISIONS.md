@@ -62,7 +62,7 @@ Each decision is marked:
 | M5 | `name` rules | **[LOCKED]** Required, trimmed, 2–40 chars, **not** required to be unique. |
 | M6 | Email format | **[LOCKED]** Required, trimmed, lowercased, RFC-5322-lite regex, unique. |
 | M7 | Invalid sort/page/limit | **[LOCKED]** Unknown `sort` → fall back to `trending`. `page<1`→1. `limit` clamped to `1..50`, default `20`. No 400 for these (lenient query params). |
-| M8 | Env vars | **[LOCKED]** Enumerated in D-ENV. JWT secret is mandatory; app refuses to boot without it. |
+| M8 | Env vars | **[LOCKED]** Enumerated in D-ENV. JWT secret is mandatory; app refuses to boot without it. Ports are configurable from `.env` on the host side only — container ports are fixed (see D-ENV, port convention). |
 | M9 | Auth per endpoint | **[LOCKED]** See the auth column in Part B. `GET` endpoints public; create/vote require auth. |
 | M10 | Sanitization/trimming | **[LOCKED]** All string inputs trimmed before validation. Length checks apply post-trim. Reject whitespace-only. No HTML stripping needed (React escapes on render; API stores raw). |
 | M11 | E2E tooling | **[LOCKED]** **Manual E2E** for the assessment. Automated tests are unit-only: Go `testing` + mocks (service/business rules) and Vitest (frontend). Core flow (signup → create → vote → rank) verified by manual click-through. |
@@ -83,7 +83,8 @@ Backend:
 | `DATABASE_URL` | yes | — | `postgres://user:pass@db:5432/soundflow?sslmode=disable` |
 | `JWT_SECRET` | yes | — | App refuses to boot if empty |
 | `JWT_TTL_HOURS` | no | `24` | Token expiry |
-| `PORT` | no | `3000` | API port |
+| `BACKEND_PORT` | no | `3000` | Port the API binds to (was `PORT`) |
+| `LOG_LEVEL` | no | `info` | `debug` \| `info` \| `warn` \| `error`; an invalid value aborts boot |
 | `CORS_ALLOWED_ORIGINS` | no | `http://localhost:5173` | Comma-separated |
 
 The app reads only the vars above (all from the process environment). Config lives in
@@ -92,11 +93,59 @@ Compose auto-loads it. `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` are
 Compose-only inputs that configure the `db` container and build the backend
 `DATABASE_URL` (host `db`) — they are not consumed by the application directly.
 
+**Port convention.** Container ports are **fixed** — API `3000`, Postgres `5432`,
+Vite `5173` — and services address each other on those inside the Compose network.
+The `*_PORT` vars only choose the **published host port**, so several stacks can run
+side by side without colliding:
+
+| Var | Default | Publishes |
+|-----|---------|-----------|
+| `BACKEND_PORT` | `3000` | host → API container `3000` |
+| `DATABASE_PORT` | `5432` | host → db container `5432` |
+| `FRONTEND_PORT` | `5173` | host → Vite container `5173` |
+
+Because `env_file` hands the whole `.env` to every container, Compose **pins**
+`BACKEND_PORT: "3000"` on the backend service. Without that override the app would
+bind the host-facing value and Compose would publish to a port nothing listens on.
+Running the backend natively (no Docker) there is no override, so `BACKEND_PORT` is
+the real bind port — the one knob works in both modes.
+
+Two host-facing values must agree with the published ports or the browser breaks:
+`VITE_API_BASE_URL` must target `BACKEND_PORT`, and `CORS_ALLOWED_ORIGINS` must list
+the origin `FRONTEND_PORT` serves.
+
 Frontend (build-time):
 
 | Var | Default | Notes |
 |-----|---------|-------|
-| `VITE_API_BASE_URL` | `http://localhost:3000/api/v1` | |
+| `VITE_API_BASE_URL` | `http://localhost:3000/api/v1` | Must point at the *published* backend port |
+| `VITE_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` \| `silent`. Vite only exposes `VITE_`-prefixed vars to the browser, so Compose mirrors the root `LOG_LEVEL` into it — `.env` keeps a single knob |
+
+### D-LOG — Logging & request correlation
+
+**[LOCKED]** Both tiers log structurally and share one trace id.
+
+- **Backend** — `log/slog` with a JSON handler on stdout at `LOG_LEVEL`. Every
+  request gets a scoped logger carrying `correlation_id`, `method`, `path`, plus
+  `user_id` once authenticated; handlers and services pull it off the context with
+  `logging.FromContext(ctx)`. One access-log line closes each request with `status`,
+  `bytes` and `duration_ms`.
+- **Frontend** — `src/lib/logger.ts`, scoped per module (`[api]`, `[auth]`,
+  `[features]`), filtered by `VITE_LOG_LEVEL`.
+- **Correlation id** — header `X-Correlation-ID`. The frontend mints one per API
+  call; the backend adopts it when it is ≤128 chars of `[A-Za-z0-9_.:-]` and mints a
+  replacement otherwise (a hostile header must not be able to inject structure into
+  a log line). It is always echoed on the response, listed in the CORS
+  `AllowedHeaders` **and** `ExposedHeaders`, and attached to `ApiError.correlationId`
+  so a failure surfaced in the UI can be traced to its server-side lines.
+
+**Level semantics.** `error` = needs an operator (5xx, unreachable dependency);
+`warn` = suspicious but handled (rejected token, 4xx from the client's view);
+`info` = business events worth keeping (signup, login, feature created, vote
+recorded, 4xx rejections with a business reason); `debug` = per-request tracing.
+
+**Never logged:** JWTs, raw passwords, password hashes. Emails are logged as
+identifiers, at `info` and below.
 
 ### D-ERR — Error envelope
 

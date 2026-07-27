@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"soundflow/internal/shared/apperr"
+	"soundflow/internal/shared/logging"
 )
 
 const maxBodyBytes = 1 << 20 // 1 MiB
@@ -62,13 +63,21 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 
 // WriteError maps any error to the frozen envelope. Unrecognized errors become
 // a 500 with their cause logged, never leaked.
-func WriteError(w http.ResponseWriter, err error) {
+//
+// It takes the request so the failure is logged through the request-scoped
+// logger — that is what puts the correlation id on the line the operator will
+// actually search for.
+func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	ae, ok := apperr.As(err)
 	if !ok {
 		ae = apperr.Internal(err)
 	}
+	log := logging.FromContext(r.Context())
 	if ae.Status >= 500 {
-		slog.Error("request failed", "code", ae.Code, "error", ae.Error())
+		// ae.Error() carries the wrapped cause; the client only ever sees Message.
+		log.ErrorContext(r.Context(), "request failed", "code", ae.Code, "status", ae.Status, "error", ae.Error())
+	} else {
+		log.DebugContext(r.Context(), "request rejected", "code", ae.Code, "status", ae.Status)
 	}
 	WriteJSON(w, ae.Status, envelope{Error: errorBody{
 		Code:    ae.Code,

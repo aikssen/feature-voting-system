@@ -111,6 +111,28 @@ Responsibilities:
     * Domain models
     * Request and response DTOs when appropriate
 
+Cross-Cutting Concerns
+
+Anything every slice needs — but no slice should own — lives under `shared/`:
+
+```
+shared/
+
+  apperr/      typed errors → the frozen error envelope
+  httpx/       JSON decode/encode, error writer, list-query parsing
+  logging/     log level, request-scoped logger, correlation id
+  middleware/  authentication, request logging
+  token/       JWT issue/parse
+```
+
+Observability follows the same rule: slices do not construct loggers. A middleware
+establishes the correlation id and a request-scoped logger on the context, and every
+layer below pulls it out with `logging.FromContext(ctx)`. That keeps `correlation_id`
+and `user_id` on every line without threading a logger through service signatures.
+
+The full logging contract — levels, the `X-Correlation-ID` header, what must never be
+logged — is frozen in DECISIONS.md D-LOG.
+
 Persistence Strategy
 
 Repositories are used to abstract persistence concerns from business logic.
@@ -166,7 +188,8 @@ Dependencies should be version pinned to ensure reproducible builds.
 Language:
 
 * Go
-* Use port :3000 for API
+* The API listens on :3000 **inside its container**; the published host port is
+  configurable via `BACKEND_PORT` (see DECISIONS.md D-ENV for the port convention)
 
 Router:
 

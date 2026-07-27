@@ -11,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"soundflow/internal/shared/apperr"
+	"soundflow/internal/shared/logging"
 )
 
 // Password policy (DECISIONS.md D-AUTH): 4–12 chars, at least one special char.
@@ -58,15 +59,21 @@ func NewServiceWith(repo Repository, hasher Hasher, tokens TokenIssuer, now func
 // Signup validates the request, creates the user, and auto-logs-in by returning
 // a token (DECISIONS.md M1).
 func (s *Service) Signup(ctx context.Context, req SignupRequest) (AuthResponse, error) {
+	// Email is an identifier, not a credential — safe to log. The password and
+	// its hash never appear in any line below.
+	log := logging.FromContext(ctx)
 	name := strings.TrimSpace(req.Name)
 	email := normalizeEmail(req.Email)
+	log.DebugContext(ctx, "signup requested", "email", email)
 
 	if err := validateSignup(name, email, req.Password); err != nil {
+		log.InfoContext(ctx, "signup rejected: validation failed", "email", email)
 		return AuthResponse{}, err
 	}
 
 	hash, err := s.hasher.Hash(req.Password)
 	if err != nil {
+		log.ErrorContext(ctx, "password hashing failed", "error", err)
 		return AuthResponse{}, apperr.Internal(err)
 	}
 
@@ -79,38 +86,54 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest) (AuthResponse, 
 	}
 	if err := s.repo.Create(ctx, user); err != nil {
 		if errors.Is(err, ErrEmailTaken) {
+			log.InfoContext(ctx, "signup rejected: email already registered", "email", email)
 			return AuthResponse{}, apperr.Validation("Email is already registered.",
 				apperr.FieldError{Field: "email", Issue: "already registered"})
 		}
+		log.ErrorContext(ctx, "signup failed: could not persist user", "email", email, "error", err)
 		return AuthResponse{}, apperr.Internal(err)
 	}
-	return s.issue(user)
+
+	log.InfoContext(ctx, "user signed up", "user_id", user.ID.String(), "email", email)
+	return s.issue(ctx, user)
 }
 
 // Login verifies credentials and returns a token. Failures are indistinguishable
 // (no user enumeration): unknown email and wrong password both yield 401.
 func (s *Service) Login(ctx context.Context, req LoginRequest) (AuthResponse, error) {
+	log := logging.FromContext(ctx)
 	email := normalizeEmail(req.Email)
+	log.DebugContext(ctx, "login requested", "email", email)
+
 	if email == "" || req.Password == "" {
+		log.InfoContext(ctx, "login failed", "email", email, "reason", "missing_credentials")
 		return AuthResponse{}, apperr.InvalidCredentials()
 	}
 
 	user, err := s.repo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
+			// The client gets an indistinguishable 401; the log keeps the real
+			// reason so a support request can be answered.
+			log.InfoContext(ctx, "login failed", "email", email, "reason", "unknown_email")
 			return AuthResponse{}, apperr.InvalidCredentials()
 		}
+		log.ErrorContext(ctx, "login failed: user lookup errored", "email", email, "error", err)
 		return AuthResponse{}, apperr.Internal(err)
 	}
 	if err := s.hasher.Compare(user.PasswordHash, req.Password); err != nil {
+		log.InfoContext(ctx, "login failed", "email", email, "reason", "wrong_password", "user_id", user.ID.String())
 		return AuthResponse{}, apperr.InvalidCredentials()
 	}
-	return s.issue(user)
+
+	log.InfoContext(ctx, "user logged in", "user_id", user.ID.String(), "email", email)
+	return s.issue(ctx, user)
 }
 
-func (s *Service) issue(user *User) (AuthResponse, error) {
+func (s *Service) issue(ctx context.Context, user *User) (AuthResponse, error) {
 	tok, err := s.tokens.Generate(user.ID, user.Name)
 	if err != nil {
+		logging.FromContext(ctx).ErrorContext(ctx, "token generation failed", "user_id", user.ID.String(), "error", err)
 		return AuthResponse{}, apperr.Internal(err)
 	}
 	return AuthResponse{Token: tok, User: user.View()}, nil

@@ -28,12 +28,12 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 func (h *Handler) signup(w http.ResponseWriter, r *http.Request) {
 	var req SignupRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
-		httpx.WriteError(w, err)
+		httpx.WriteError(w, r, err)
 		return
 	}
 	res, err := h.svc.Signup(r.Context(), req)
 	if err != nil {
-		httpx.WriteError(w, err)
+		httpx.WriteError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, res)
@@ -42,12 +42,12 @@ func (h *Handler) signup(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
-		httpx.WriteError(w, err)
+		httpx.WriteError(w, r, err)
 		return
 	}
 	res, err := h.svc.Login(r.Context(), req)
 	if err != nil {
-		httpx.WriteError(w, err)
+		httpx.WriteError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, res)

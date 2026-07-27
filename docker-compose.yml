@@ -8,6 +8,11 @@
 #
 # All credentials and secrets come from the root .env file (auto-loaded by Compose
 # for ${VAR} substitution). Nothing sensitive is hardcoded here.
+#
+# Port convention (DECISIONS.md D-ENV): container ports are FIXED (3000 / 5432 /
+# 5173); the *_PORT vars in .env only choose the published host port, so several
+# stacks can run side by side without colliding. Services talk to each other over
+# the Compose network on the fixed container ports, never the published ones.
 
 x-app-env: &app-env
   - path: ${SOUNDFLOW_COMPOSE_ENV_FILE:-.env}
@@ -25,7 +30,9 @@ services:
       # Named volume → data survives `docker compose down` and restarts.
       - pgdata:/var/lib/postgresql/data
     ports:
-      - ${DATABASE_PORT}:5432 # exposed for local inspection; not required by the app
+      # Host port only — the backend still reaches Postgres at db:5432 inside the
+      # network. Bump DATABASE_PORT to avoid clashing with other local Postgres.
+      - ${DATABASE_PORT:-5432}:5432
     healthcheck:
       test:
         [
@@ -39,15 +46,19 @@ services:
 
   backend:
     build: ./backend
-    # JWT_SECRET, JWT_TTL_HOURS, PORT and CORS_ALLOWED_ORIGINS are read from the
-    # root .env. Copy .env.example to .env before the first `up`.
+    # JWT_SECRET, JWT_TTL_HOURS, LOG_LEVEL and CORS_ALLOWED_ORIGINS are read from
+    # the root .env. Copy .env.example to .env before the first `up`.
     env_file: *app-env
     environment:
       # The .env DATABASE_URL targets localhost (native dev). Inside the Compose
       # network Postgres is the `db` service, so build the URL from the same creds.
       DATABASE_URL: postgres://${POSTGRES_USER:-soundflow}:${POSTGRES_PASSWORD:-soundflow}@db:5432/${POSTGRES_DB:-soundflow}?sslmode=disable
+      # env_file would otherwise leak the *host* BACKEND_PORT into the container
+      # and the app would bind a port Compose never published. Pin it to 3000 —
+      # the same port the Dockerfile EXPOSEs and healthchecks.
+      BACKEND_PORT: "3000"
     ports:
-      - ${BACKEND_PORT}:3000
+      - ${BACKEND_PORT:-3000}:3000
     depends_on:
       db:
         condition: service_healthy
@@ -57,9 +68,12 @@ services:
     env_file: *app-env
     environment:
       # The browser runs on the host, so it reaches the API via the published port.
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:${BACKEND_PORT:-3000}/api/v1}
+      # Vite only exposes VITE_-prefixed vars to the browser, so mirror the single
+      # LOG_LEVEL knob from .env into the name the frontend logger reads.
+      VITE_LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
-      - ${FRONTEND_PORT}:5173
+      - ${FRONTEND_PORT:-5173}:5173
     depends_on:
       - backend
 

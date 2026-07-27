@@ -30,13 +30,13 @@ func (h *Handler) vote(w http.ResponseWriter, r *http.Request) {
 
 	featureID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		httpx.WriteError(w, apperr.NotFound("Feature request not found."))
+		httpx.WriteError(w, r, apperr.NotFound("Feature request not found."))
 		return
 	}
 
 	res, err := h.svc.Vote(r.Context(), featureID, principal.UserID)
 	if err != nil {
-		httpx.WriteError(w, err)
+		httpx.WriteError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, res)

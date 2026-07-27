@@ -33,12 +33,29 @@ non-local use — nothing sensitive is hardcoded in `docker-compose.yml`.
 
 Then open:
 
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:5173 |
-| API | http://localhost:3000/api/v1 |
-| Health | http://localhost:3000/api/v1/health |
-| Postgres | `localhost:5432` (user/pass/db: `soundflow`) |
+| Service | URL | Host port from `.env` |
+|---------|-----|-----------------------|
+| Frontend | http://localhost:5173 | `FRONTEND_PORT` |
+| API | http://localhost:3000/api/v1 | `BACKEND_PORT` |
+| Health | http://localhost:3000/api/v1/health | `BACKEND_PORT` |
+| Postgres | `localhost:5432` (user/pass/db: `soundflow`) | `DATABASE_PORT` |
+
+### Changing ports
+
+Container ports are fixed (`3000` / `5432` / `5173`) and services address each other
+on those inside the Compose network. The `*_PORT` vars in `.env` only pick the
+**published host port**, so several stacks — or an existing local Postgres — can
+coexist. To move the API to `3001` and Postgres to `5433`:
+
+```bash
+BACKEND_PORT=3001
+DATABASE_PORT=5433
+VITE_API_BASE_URL=http://localhost:3001/api/v1   # the browser must follow the API
+```
+
+Two values are host-facing and must be kept in step: `VITE_API_BASE_URL` (points at
+`BACKEND_PORT`) and `CORS_ALLOWED_ORIGINS` (must list the origin `FRONTEND_PORT`
+serves). Apply changes with `docker compose up -d` — no rebuild needed.
 
 The backend waits for Postgres to become healthy, applies the schema
 (idempotent, `IF NOT EXISTS`), and seeds demo data **once** (only when the
@@ -73,10 +90,12 @@ You need Go 1.26+, Node 22+, pnpm, and a PostgreSQL 16 instance.
 **Backend**
 
 ```bash
-cp .env.example .env          # at the repo root; set DATABASE_URL + JWT_SECRET
+# at the repo root: uncomment DATABASE_URL (Compose sets it for you, native dev
+# does not) and set a real JWT_SECRET
+cp .env.example .env
 export $(grep -v '^#' .env | xargs)
 cd backend
-go run ./cmd/api              # serves on :3000, auto-migrates + seeds
+go run ./cmd/api              # binds BACKEND_PORT (3000), auto-migrates + seeds
 go test ./...                 # unit tests (mock-based, no DB needed)
 ```
 
@@ -103,14 +122,59 @@ pnpm build                    # type-check + production build
 | `DATABASE_URL` | yes | — | Postgres DSN (native dev; Compose overrides the host to `db`) |
 | `JWT_SECRET` | yes | — | App refuses to boot if empty |
 | `JWT_TTL_HOURS` | no | `24` | Token lifetime (no refresh token) |
-| `PORT` | no | `3000` | API port |
-| `CORS_ALLOWED_ORIGINS` | no | `http://localhost:5173` | Comma-separated |
+| `BACKEND_PORT` | no | `3000` | Published host port for the API (was `PORT`) |
+| `DATABASE_PORT` | no | `5432` | Published host port for Postgres |
+| `FRONTEND_PORT` | no | `5173` | Published host port for the Vite dev server |
+| `LOG_LEVEL` | no | `info` | `debug` \| `info` \| `warn` \| `error`; an invalid value aborts boot |
+| `CORS_ALLOWED_ORIGINS` | no | `http://localhost:5173` | Comma-separated; must include the frontend origin |
 
 **Frontend** (`frontend/.env.example`)
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `VITE_API_BASE_URL` | `http://localhost:3000/api/v1` | Backend base URL |
+| `VITE_API_BASE_URL` | `http://localhost:3000/api/v1` | Must target the *published* `BACKEND_PORT` |
+| `VITE_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` \| `silent`. Under Compose this is mirrored from `LOG_LEVEL`, so `.env` keeps one knob |
+
+---
+
+## Logs & tracing
+
+Both tiers log structurally and share one trace id, so a single browser action can
+be followed end to end (contract in `DECISIONS.md` D-LOG).
+
+The backend emits JSON to stdout; the frontend logs to the browser console, scoped
+per module (`[api]`, `[auth]`, `[features]`). Verbosity is one knob:
+
+```bash
+LOG_LEVEL=debug docker compose up -d     # or edit .env
+```
+
+Every API call carries an `X-Correlation-ID`, minted by the frontend and echoed back
+by the backend, which stamps it — plus `user_id` once authenticated — on every line
+the request produces. To follow one request:
+
+```bash
+# grab the id from the browser console, the response header, or send your own
+curl -s -D - http://localhost:3000/api/v1/health -H 'X-Correlation-ID: my-trace-1'
+
+docker compose logs backend | grep my-trace-1
+```
+
+```
+DEBUG request started        correlation_id=my-trace-1 method=POST path=/api/v1/features/…/vote
+DEBUG request authenticated  correlation_id=my-trace-1 user_id=507f21ed-…
+INFO  vote recorded          correlation_id=my-trace-1 user_id=507f21ed-… total_votes=4
+INFO  request completed      correlation_id=my-trace-1 status=201 duration_ms=4
+```
+
+Failures surfaced in the UI carry the id too — `ApiError.correlationId` — so a bug
+report can be tied straight to its server-side lines.
+
+**Levels:** `error` needs an operator (5xx, dependency down) · `warn` is suspicious
+but handled (rejected token, 4xx) · `info` is business events (signup, login, feature
+created, vote recorded) · `debug` is per-request tracing.
+
+JWTs, raw passwords and password hashes are never logged.
 
 ---
 

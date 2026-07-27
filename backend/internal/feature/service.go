@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"soundflow/internal/shared/apperr"
+	"soundflow/internal/shared/logging"
 )
 
 // Field bounds (DECISIONS.md — validation summary), enforced post-trim.
@@ -36,10 +37,13 @@ func NewServiceWith(repo Repository, now func() time.Time) *Service {
 
 // Create validates and persists a new feature request authored by authorID.
 func (s *Service) Create(ctx context.Context, authorID uuid.UUID, req CreateRequest) (FeatureView, error) {
+	log := logging.FromContext(ctx)
 	title := strings.TrimSpace(req.Title)
 	desc := strings.TrimSpace(req.Description)
+	log.DebugContext(ctx, "feature create requested", "title", title, "title_len", len([]rune(title)), "description_len", len([]rune(desc)))
 
 	if err := validateCreate(title, desc); err != nil {
+		log.InfoContext(ctx, "feature create rejected: validation failed", "title", title)
 		return FeatureView{}, err
 	}
 
@@ -53,11 +57,14 @@ func (s *Service) Create(ctx context.Context, authorID uuid.UUID, req CreateRequ
 	}
 	if err := s.repo.Create(ctx, f); err != nil {
 		if errors.Is(err, ErrDuplicate) {
+			log.InfoContext(ctx, "feature create rejected: duplicate title", "normalized_title", f.NormalizedTitle)
 			return FeatureView{}, apperr.DuplicateFeature()
 		}
+		log.ErrorContext(ctx, "feature create failed", "title", title, "error", err)
 		return FeatureView{}, apperr.Internal(err)
 	}
 
+	log.InfoContext(ctx, "feature created", "feature_id", f.ID.String(), "title", f.Title)
 	return FeatureView{
 		ID:          f.ID,
 		Title:       f.Title,
@@ -73,7 +80,11 @@ func (s *Service) Create(ctx context.Context, authorID uuid.UUID, req CreateRequ
 
 // List returns a page of feature requests with derived rank.
 func (s *Service) List(ctx context.Context, currentUserID *uuid.UUID, search, sort string, page, limit int) (PagedFeatures, error) {
+	log := logging.FromContext(ctx)
 	offset := (page - 1) * limit
+	log.DebugContext(ctx, "feature list requested", "search", search, "sort", sort, "page", page, "limit", limit)
+
+	start := time.Now()
 	items, total, err := s.repo.List(ctx, currentUserID, ListParams{
 		Search: search,
 		Sort:   sort,
@@ -81,8 +92,10 @@ func (s *Service) List(ctx context.Context, currentUserID *uuid.UUID, search, so
 		Offset: offset,
 	})
 	if err != nil {
+		log.ErrorContext(ctx, "feature list failed", "search", search, "sort", sort, "error", err)
 		return PagedFeatures{}, apperr.Internal(err)
 	}
+	log.DebugContext(ctx, "feature list resolved", "returned", len(items), "total", total, "query_ms", time.Since(start).Milliseconds())
 
 	// rank is 1-based within the global sorted result (DECISIONS.md O3 —
 	// derived, never persisted).
@@ -103,13 +116,17 @@ func (s *Service) List(ctx context.Context, currentUserID *uuid.UUID, search, so
 
 // Get returns a single feature request, or a 404.
 func (s *Service) Get(ctx context.Context, currentUserID *uuid.UUID, id uuid.UUID) (FeatureView, error) {
+	log := logging.FromContext(ctx)
 	v, err := s.repo.GetByID(ctx, currentUserID, id)
 	if err != nil {
 		if errors.Is(err, ErrFeatureNotFD) {
+			log.InfoContext(ctx, "feature not found", "feature_id", id.String())
 			return FeatureView{}, apperr.NotFound("Feature request not found.")
 		}
+		log.ErrorContext(ctx, "feature get failed", "feature_id", id.String(), "error", err)
 		return FeatureView{}, apperr.Internal(err)
 	}
+	log.DebugContext(ctx, "feature resolved", "feature_id", id.String(), "total_votes", v.TotalVotes)
 	v.Rank = 1
 	return *v, nil
 }

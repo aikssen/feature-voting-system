@@ -16,6 +16,7 @@ import (
 
 	"soundflow/internal/shared/apperr"
 	"soundflow/internal/shared/httpx"
+	"soundflow/internal/shared/logging"
 	"soundflow/internal/shared/token"
 )
 
@@ -35,20 +36,30 @@ func Authenticator(tm *token.Manager) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
 			if header == "" {
+				logging.FromContext(r.Context()).DebugContext(r.Context(), "request is anonymous")
 				next.ServeHTTP(w, r)
 				return
 			}
 			raw, ok := bearer(header)
 			if !ok {
-				httpx.WriteError(w, apperr.Unauthenticated("Malformed Authorization header."))
+				// The token itself is never logged — only the fact it was unusable.
+				logging.FromContext(r.Context()).WarnContext(r.Context(), "malformed authorization header")
+				httpx.WriteError(w, r, apperr.Unauthenticated("Malformed Authorization header."))
 				return
 			}
 			claims, err := tm.Parse(raw)
 			if err != nil {
-				httpx.WriteError(w, apperr.Unauthenticated("Invalid or expired token."))
+				logging.FromContext(r.Context()).WarnContext(r.Context(), "token rejected", "error", err)
+				httpx.WriteError(w, r, apperr.Unauthenticated("Invalid or expired token."))
 				return
 			}
-			ctx := context.WithValue(r.Context(), principalKey, Principal{UserID: claims.UserID, Name: claims.Name})
+
+			// Pin user_id onto the request logger so every downstream line — service,
+			// repository error, access log — is attributable without re-deriving it.
+			log := logging.FromContext(r.Context()).With("user_id", claims.UserID.String())
+			ctx := logging.WithLogger(r.Context(), log)
+			ctx = context.WithValue(ctx, principalKey, Principal{UserID: claims.UserID, Name: claims.Name})
+			log.DebugContext(ctx, "request authenticated")
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -58,7 +69,7 @@ func Authenticator(tm *token.Manager) func(http.Handler) http.Handler {
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := PrincipalFrom(r.Context()); !ok {
-			httpx.WriteError(w, apperr.Unauthenticated(""))
+			httpx.WriteError(w, r, apperr.Unauthenticated(""))
 			return
 		}
 		next.ServeHTTP(w, r)

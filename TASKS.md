@@ -310,6 +310,29 @@ Assessment Delivery
 
 ⸻
 
+Phase 7 - Local DX & Observability
+
+Configurable ports
+
+* Make host ports configurable from .env (BACKEND_PORT / DATABASE_PORT / FRONTEND_PORT)
+* Keep container ports fixed so services address each other on stable ports
+* Add defaults to every Compose substitution so the stack boots without a .env
+
+Structured logging
+
+* Add LOG_LEVEL, applied to a JSON slog handler on the backend
+* Replace chi's plain-text logger so stdout stays machine-parseable
+* Log the important paths in auth / feature / vote at the right level
+* Mirror the same single knob into the frontend logger (VITE_LOG_LEVEL)
+
+Request correlation
+
+* Mint an X-Correlation-ID per API call in the frontend
+* Adopt or replace it on the backend, echo it, and stamp it on every log line
+* Expose it through CORS and on ApiError so UI failures are traceable
+
+⸻
+
 Stretch Goals
 
 Optional improvements if time allows.
