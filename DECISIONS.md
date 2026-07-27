@@ -301,7 +301,8 @@ Consequences worth stating:
   failed from outside the network *and* as mixed content on an HTTPS page.
 - `CORS_ALLOWED_ORIGINS` is empty in production. Same-origin requests never trigger a
   preflight, so an allowlist would only be a stale permission waiting to be misused.
-- The database and API stop publishing host ports in the production override. The
-  reverse proxy becomes the only entry point.
+- Nothing publishes a host port in the production compose. The reverse proxy becomes
+  the only entry point, and the frontend joins `dokploy-network` so Traefik can reach
+  it.
 - Caddy's site address is `:80`, not a hostname. Given a hostname it would attempt
   ACME, which is wrong here: TLS terminates at the edge and this hop is internal.
