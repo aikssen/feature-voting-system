@@ -268,3 +268,40 @@ _None — both open items resolved 2026-06-21:_
 2. **M11** — Manual E2E; automated unit tests only. ✅
 
 All items are now **[LOCKED]**. This contract is frozen and ready to build to, unless you object.
+
+---
+
+## Part C — Amendments after freeze
+
+The contract above was frozen on 2026-06-21. Entries here amend it. Each one names the
+decision it touches, what changed, and what is deliberately left alone; nothing above
+is edited in place, so the original reasoning stays readable.
+
+| #   | Amends | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | C5     | **[LOCKED]** Add a production frontend target — built SPA served by **Caddy**, which also reverse-proxies `/api` to the backend on the same origin. C5 stands for local review: `docker compose up` still runs the Vite dev server on `:5173`, and the default `Dockerfile` is untouched. The production path is `frontend/Dockerfile.prod` + `frontend/Caddyfile` + `docker-compose.prod.yml`. C5 said "no nginx stage"; this is not one — the reason C5 gave (setup simplicity for review) is preserved, and Caddy answers a requirement C5 never faced: exposure beyond the LAN. |
+
+### Why A1 exists
+
+C5 was decided for an assessment read on a laptop. Publishing the same stack to the
+Internet breaks on two independent counts:
+
+- **A dev server refuses unknown hosts.** Vite rejects requests whose `Host` header is
+  not in `server.allowedHosts`, so a public hostname returns "Blocked request" and the
+  application never loads.
+- **A dev server is not a public artifact.** It serves the module graph and project
+  files, transforms on demand without minification, and has no business handling
+  untrusted traffic.
+
+Consequences worth stating:
+
+- `VITE_API_BASE_URL` defaults to the relative **`/api/v1`** in the production image.
+  The bundle is therefore hostname-agnostic; moving it to another domain needs no
+  rebuild. The previous LAN-absolute value (`http://<host>:3001/api/v1`) would have
+  failed from outside the network *and* as mixed content on an HTTPS page.
+- `CORS_ALLOWED_ORIGINS` is empty in production. Same-origin requests never trigger a
+  preflight, so an allowlist would only be a stale permission waiting to be misused.
+- The database and API stop publishing host ports in the production override. The
+  reverse proxy becomes the only entry point.
+- Caddy's site address is `:80`, not a hostname. Given a hostname it would attempt
+  ACME, which is wrong here: TLS terminates at the edge and this hop is internal.

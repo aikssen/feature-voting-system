@@ -1,0 +1,32 @@
+# Serves the built SPA and proxies the API on the same origin, so the browser only
+# ever talks to one host. That removes CORS entirely, keeps cookies same-site, and
+# lets VITE_API_BASE_URL stay the relative `/api/v1` instead of being baked per
+# environment.
+#
+# The site address is `:80` on purpose. Given a hostname, Caddy would try to obtain
+# certificates over ACME — pointless and noisy here, because TLS terminates at
+# Cloudflare and this hop is internal to the host.
+:80 {
+	encode zstd gzip
+
+	root * /srv
+
+	# `route` pins the order. Without it, try_files would rewrite /api requests to
+	# index.html before reverse_proxy ever saw them.
+	route {
+		reverse_proxy /api/* backend:3000
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}
