@@ -28,7 +28,8 @@ function page(items: FeatureView[]): Page<FeatureView> {
 }
 
 function jsonResponse(body: unknown): Response {
-  return { ok: true, status: 200, json: () => Promise.resolve(body) } as Response
+  // headers must exist — the api client reads the echoed correlation id from it.
+  return { ok: true, status: 200, headers: new Headers(), json: () => Promise.resolve(body) } as Response
 }
 
 function renderApp() {

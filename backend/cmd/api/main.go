@@ -17,6 +17,7 @@ import (
 	"soundflow/internal/auth"
 	"soundflow/internal/feature"
 	"soundflow/internal/infrastructure"
+	"soundflow/internal/shared/logging"
 	"soundflow/internal/shared/token"
 	"soundflow/internal/vote"
 )
@@ -29,12 +30,26 @@ func main() {
 }
 
 func run() error {
+	// Bootstrap logger: config (and therefore LOG_LEVEL) isn't loaded yet, so
+	// anything that fails below still gets reported.
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	cfg, err := infrastructure.LoadConfig()
 	if err != nil {
 		return err
 	}
+
+	logger, err := logging.New(cfg.LogLevel)
+	if err != nil {
+		return err
+	}
+	slog.SetDefault(logger)
+	slog.Info("configuration loaded",
+		"log_level", cfg.LogLevel,
+		"port", cfg.Port,
+		"jwt_ttl_hours", cfg.JWTTTLHours,
+		"cors_allowed_origins", cfg.CORSAllowedOrigins,
+	)
 
 	// Root context cancelled on shutdown signal.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -45,6 +60,7 @@ func run() error {
 		return err
 	}
 	defer pool.Close()
+	slog.Info("database connected")
 
 	if err := infrastructure.Migrate(ctx, pool); err != nil {
 		return err
@@ -71,6 +87,7 @@ func run() error {
 		Feature:      feature.NewHandler(featureSvc),
 		Vote:         vote.NewHandler(voteSvc),
 		CORSOrigins:  cfg.CORSAllowedOrigins,
+		Logger:       logger,
 	})
 
 	srv := &http.Server{

@@ -14,17 +14,23 @@ type Config struct {
 	JWTSecret          string
 	JWTTTLHours        int
 	Port               string
+	LogLevel           string
 	CORSAllowedOrigins []string
 }
 
 // LoadConfig reads configuration from the environment and validates the
 // mandatory fields. The app must refuse to boot without a JWT secret.
+//
+// BACKEND_PORT is the port this process binds to. Under Docker Compose the
+// container always binds 3000 (Compose overrides the value from .env) and the
+// .env knob only picks the published host port; natively it is the real port.
 func LoadConfig() (Config, error) {
 	cfg := Config{
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
 		JWTSecret:          os.Getenv("JWT_SECRET"),
 		JWTTTLHours:        envInt("JWT_TTL_HOURS", 24),
-		Port:               envString("PORT", "3000"),
+		Port:               envString("BACKEND_PORT", "3000"),
+		LogLevel:           envString("LOG_LEVEL", "info"),
 		CORSAllowedOrigins: envList("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
 	}
 

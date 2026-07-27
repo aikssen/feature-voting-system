@@ -3,9 +3,12 @@ import { api, ApiError } from '../api'
 import { useAuth } from '../auth/useAuth'
 import { useToast } from '../components/toast/useToast'
 import { Button, TextArea, TextField } from '../components/ui'
+import { createLogger } from '../lib/logger'
 
 const TITLE_MAX = 100
 const DESC_MAX = 200
+
+const log = createLogger('submit-feature')
 
 interface SubmitFeatureFormProps {
   open: boolean
@@ -50,6 +53,7 @@ export function SubmitFeatureForm({ open, onClose, onCreated }: SubmitFeatureFor
 
     const errs = clientValidate()
     if (Object.keys(errs).length > 0) {
+      log.debug('submission blocked by client validation', { fields: Object.keys(errs) })
       setFieldErrors(errs)
       return
     }
@@ -57,12 +61,17 @@ export function SubmitFeatureForm({ open, onClose, onCreated }: SubmitFeatureFor
     setSubmitting(true)
     setFieldErrors({})
     try {
-      await api.createFeature({ title: title.trim(), description: description.trim() }, token)
+      const created = await api.createFeature({ title: title.trim(), description: description.trim() }, token)
+      log.info('feature request created', { feature_id: created.id, title: created.title })
       toast.success('Request submitted')
       reset()
       onClose()
       onCreated()
     } catch (err) {
+      log.warn('feature request submission failed', {
+        code: err instanceof ApiError ? err.code : 'UNKNOWN',
+        correlation_id: err instanceof ApiError ? err.correlationId : undefined,
+      })
       if (err instanceof ApiError && err.code === 'DUPLICATE_FEATURE') {
         setFieldErrors({ title: 'A request with this title already exists.' })
       } else if (err instanceof ApiError && err.details.length > 0) {
