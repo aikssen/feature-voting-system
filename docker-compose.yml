@@ -57,7 +57,7 @@ services:
     env_file: *app-env
     environment:
       # The browser runs on the host, so it reaches the API via the published port.
-      VITE_API_BASE_URL: http://localhost:3000/api/v1
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     ports:
       - ${FRONTEND_PORT}:5173
     depends_on:
