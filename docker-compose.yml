@@ -9,9 +9,14 @@
 # All credentials and secrets come from the root .env file (auto-loaded by Compose
 # for ${VAR} substitution). Nothing sensitive is hardcoded here.
 
+x-app-env: &app-env
+  - path: ${SOUNDFLOW_COMPOSE_ENV_FILE:-.env}
+    required: true
+
 services:
   db:
     image: postgres:16-alpine
+    env_file: *app-env
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-soundflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-soundflow}
@@ -20,9 +25,13 @@ services:
       # Named volume → data survives `docker compose down` and restarts.
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432" # exposed for local inspection; not required by the app
+      - ${DATABASE_PORT}:5432 # exposed for local inspection; not required by the app
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-soundflow} -d ${POSTGRES_DB:-soundflow}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-soundflow} -d ${POSTGRES_DB:-soundflow}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -32,26 +41,25 @@ services:
     build: ./backend
     # JWT_SECRET, JWT_TTL_HOURS, PORT and CORS_ALLOWED_ORIGINS are read from the
     # root .env. Copy .env.example to .env before the first `up`.
-    env_file:
-      - path: .env
-        required: false
+    env_file: *app-env
     environment:
       # The .env DATABASE_URL targets localhost (native dev). Inside the Compose
       # network Postgres is the `db` service, so build the URL from the same creds.
       DATABASE_URL: postgres://${POSTGRES_USER:-soundflow}:${POSTGRES_PASSWORD:-soundflow}@db:5432/${POSTGRES_DB:-soundflow}?sslmode=disable
     ports:
-      - "3000:3000"
+      - ${BACKEND_PORT}:3000
     depends_on:
       db:
         condition: service_healthy
 
   frontend:
     build: ./frontend
+    env_file: *app-env
     environment:
       # The browser runs on the host, so it reaches the API via the published port.
       VITE_API_BASE_URL: http://localhost:3000/api/v1
     ports:
-      - "5173:5173"
+      - ${FRONTEND_PORT}:5173
     depends_on:
       - backend
 
